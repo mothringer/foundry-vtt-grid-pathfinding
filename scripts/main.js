@@ -113,7 +113,7 @@ class PathfindingRuler
 					if (!this.hitsWall(this.origin,this.endpoint,true))
 					{
 						this.waypoints = [new PIXI.Point(origin.x,origin.y)];
-						this.removeRuler();
+						//this.removeRuler(); duplicative with this.drawRuler now
 						this.drawRuler();
 					}
 					else
@@ -143,18 +143,54 @@ class PathfindingRuler
 	
 	drawRuler()
 	{
-		let newruler = this.ruler;
-		let endpoint = this.convertGridspaceToLocation(this.endpoint);
-		newruler._state = 2;
-		newruler.waypoints = this.waypoints.splice(0);
-		newruler.destination = new PIXI.Point(endpoint.x,endpoint.y);
-		while ( newruler.waypoints.length > newruler.labels.children.length) 
-		{
-			newruler.labels.addChild(new PreciseText("", CONFIG.canvasTextStyle));
-		}
-		newruler.class = "Ruler";
-		this.ruler.update(newruler.toJSON());
+	  // avoid clearing the ruler unnecessarily:
+	  // - should help performance
+	  // - allow other modules like Elevation Ruler to know when waypoints are added/removed
+	  const endpoint = this.convertGridspaceToLocation(this.endpoint);
+	  
+	  console.log("Pathfinding|drawing", this.waypoints, this.ruler.waypoints);
+          // for each waypoint from origin:
+	  // if same point, keep
+	  // if new point, remove all subsequent waypoints
+	  this.waypoints.forEach((w, idx) => {
+            console.log(`Pathfinding| idx ${idx}, w ${w.x}, ${w.y}`, w);
+	    if(this.ruler.waypoints.length <= idx) {
+	      this.ruler._addWaypoint(w);
+	    } else if(!this.pointsAlmostEqual(this.ruler.waypoints[idx], w)) {
+	      // remove all waypoints from idx on; then add the new waypoint
+	      const num_to_remove = this.ruler.waypoints.length - idx;
+	      for(let i=0; i < num_to_remove; i++) {
+	        this.ruler._removeWaypoint();
+	      }
+	      this.ruler._addWaypoint(w);  
+	    } 
+	    // otherwise keep the waypoint; do nothing
+	  });
+	  this.ruler._state = Ruler.STATES.MEASURING; // does this accomplish anything now?
+	  //this.ruler.destination = new PIXI.Point(endpoint.x,endpoint.y);
+	  	  
+	  this.ruler.measure(new PIXI.Point(endpoint.x,endpoint.y));
 	}
+	
+ /*
+  * Test if two points are almost equal, given a small error window.
+  * Useful when comparing existing and proposed waypoints.
+  * @param {PIXI.Point} p1  Point in {x, y} format.
+  * @param {PIXI.Point} p2  Point in {x, y} format.
+  * @return {Boolean} True if the points are within the error of each other 
+  */
+	pointsAlmostEqual(p1, p2, EPSILON = 1e-5) {
+	  return this.almostEqual(p1.x, p2.x, EPSILON) && this.almostEqual(p1.y, p2.y, EPSILON);
+	}
+	
+ /*
+  * Test if two numbers are almost equal, given a small error window.
+  * From https://www.toptal.com/python/computational-geometry-in-python-from-theory-to-implementation
+  */
+  almostEqual(x, y, EPSILON = 1e-5) {
+    return Math.abs(x - y) < EPSILON;
+  }
+	
 	
 	removeRuler()
 	{
@@ -253,7 +289,7 @@ class PathfindingRuler
 			}
 			if (currentNode.x=== endpoint.x && currentNode.y === endpoint.y)
 			{
-				this.removeRuler();
+				//this.removeRuler(); // is this removal necessary?
 				let current = currentNode;
 				let ret = [];
 				while(current.parent)
@@ -306,7 +342,7 @@ class PathfindingRuler
 				}
 			}
 		}
-		this.removeRuler();
+		//this.removeRuler();
 	}
 	
 	isInList(list, node)
@@ -364,6 +400,8 @@ class PathfindingRuler
 		}
 	}
 }
+
+
 
 
 Hooks.on("init", () => {
